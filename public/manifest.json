@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Frame · 项目记忆配图 Agent",
+  "version": "0.5.0",
+  "description": "选中文字右键直接生图。Agent 结合项目记忆，自动选择 SVG skill 或第三方图片 API。",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "sidePanel"
+  ],
+  "host_permissions": ["http://127.0.0.1:8787/*"],
+  "icons": {
+    "16": "icons/frame-16.png",
+    "48": "icons/frame-48.png",
+    "128": "icons/frame-128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Frame · 生图结果与项目记忆",
+    "default_icon": {
+      "16": "icons/frame-16.png",
+      "32": "icons/frame-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://127.0.0.1:8787; img-src 'self' data: blob: http://127.0.0.1:8787;"
+  }
+}
