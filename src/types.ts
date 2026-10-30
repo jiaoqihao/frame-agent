@@ -38,6 +38,16 @@ export type Reference = {
   hasImage: boolean;
 };
 export type Plan = {
+  review?: {
+    revision: string;
+    understanding: string;
+    suitability: "ready" | "needs_adaptation" | "needs_information";
+    adaptedInstruction: string;
+    changes: string[];
+    uncertainties: string[];
+    approvedInstruction?: string;
+    approvedAt?: string;
+  };
   title: string;
   summary: string;
   prompt: string;
@@ -64,7 +74,13 @@ export type Plan = {
 export type Job = {
   id: string;
   project_id: string;
-  status: "queued" | "running" | "completed" | "failed";
+  status:
+    | "queued"
+    | "running"
+    | "awaiting_review"
+    | "cancelled"
+    | "completed"
+    | "failed";
   stage: string;
   result_asset_id: string | null;
   error: string | null;
@@ -72,6 +88,8 @@ export type Job = {
   created_at: string;
   request: {
     instruction: string;
+    approvedInstruction?: string;
+    approvedAt?: string;
     selectionText?: string;
     mode: string;
     assetIds: string[];

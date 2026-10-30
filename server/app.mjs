@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { validateReview } from "./source-review.mjs";
 import { createChatHandler } from "./chat.mjs";
 import {
   InputError,
@@ -105,7 +106,7 @@ export function createApp({
       pump();
     },
   });
-  function schedule(job, context) {
+  function schedule(job, context, approved = false) {
     context.references = context.references.map((r) => ({
       ...r,
       asset: { ...r.asset, svgSpec: store.svgSpec(r.asset.id) },
@@ -121,11 +122,32 @@ export function createApp({
       try {
         store.updateJob(job.id, {
           status: "running",
-          stage: "Agent 正在理解内容并选择生图方式",
+          stage: approved
+            ? "正在根据审核内容规划绘图"
+            : "正在理解内容并整理绘图说明",
         });
+        if (!approved) {
+          const review = validateReview(await taskProvider.interpret(context));
+          store.updateJob(job.id, {
+            status: "awaiting_review",
+            stage: "等待你审核绘图说明",
+            plan: {
+              review: { ...review, revision: randomUUID() },
+              snapshot: context.snapshot,
+              provider: taskProvider.name,
+              configRevision: configured?.revision || null,
+            },
+          });
+          return;
+        }
         const plan = await taskProvider.plan(context);
         const recorded = {
           ...plan,
+          review: {
+            ...job.plan.review,
+            approvedInstruction: job.request.approvedInstruction,
+            approvedAt: job.request.approvedAt,
+          },
           snapshot: context.snapshot,
           provider: taskProvider.name,
           configRevision: configured?.revision || null,
@@ -147,7 +169,7 @@ export function createApp({
         const result = store.createAsset(job.project_id, {
           kind: "generated",
           title: plan.title,
-          content: `${plan.summary}\n用户要求：${context.request.selectionText || context.request.instruction}`,
+          content: `${plan.summary}\n用户审核的要求：${context.request.instruction}`,
           ...image,
         });
         store.updateJob(job.id, {
@@ -168,7 +190,7 @@ export function createApp({
       } catch (error) {
         store.updateJob(job.id, {
           status: "failed",
-          stage: "生成失败",
+          stage: approved ? "生成失败" : "内容理解失败",
           error: error instanceof Error ? error.message : "未知错误",
         });
       } finally {
@@ -246,7 +268,7 @@ export function createApp({
           imageApiReady:
             activeProvider.name === "demo" ||
             Boolean(activeProvider.imageAPI?.apiKey),
-          version: "0.6.0",
+          version: "0.7.0",
         });
       }
       if (url.pathname === "/api/quick-generate" && req.method === "POST") {
@@ -431,6 +453,67 @@ export function createApp({
       if (
         path[0] === "api" &&
         path[1] === "jobs" &&
+        path.length === 4 &&
+        ["approve", "cancel"].includes(path[3]) &&
+        req.method === "POST"
+      ) {
+        const body = await readJson(req);
+        const job = store.job(path[2]);
+        if (!job) throw new InputError("任务不存在", 404);
+        const revision = requiredText(body.reviewRevision, "审核版本", 80);
+        if (revision !== job.plan?.review?.revision)
+          throw new InputError("审核版本已变化，请刷新后重试", 409);
+        if (path[3] === "cancel") {
+          if (job.status === "cancelled") return send(200, job);
+          if (job.status !== "awaiting_review")
+            throw new InputError("此任务已进入生成，不能取消审核", 409);
+          return send(
+            200,
+            store.updateJob(job.id, { status: "cancelled", stage: "已放弃" }),
+          );
+        }
+        const instruction = requiredText(body.instruction, "绘图说明", 12000);
+        if (job.request.approvedAt) {
+          if (job.request.approvedInstruction !== instruction)
+            throw new InputError("此审核已提交，不能重复修改", 409);
+          return send(200, job);
+        }
+        if (job.status !== "awaiting_review")
+          throw new InputError("请等待内容理解完成后审核", 409);
+        if (pending.size >= 12)
+          throw new InputError("等待中的任务较多，请稍后再试", 429);
+        const snapshot = job.plan.snapshot;
+        const references = snapshot.references.map((r) => {
+          const asset = store.asset(r.id);
+          if (!asset || asset.project_id !== job.project_id)
+            throw new InputError("审核素材不存在或不属于此项目", 409);
+          return { asset, reason: r.reason };
+        });
+        const request = {
+          ...job.request,
+          approvedInstruction: instruction,
+          approvedAt: new Date().toISOString(),
+        };
+        const updated = store.updateJob(job.id, {
+          request,
+          status: "queued",
+          stage: "审核通过，等待生成",
+          error: null,
+        });
+        schedule(
+          updated,
+          {
+            request: { ...request, instruction, selectionText: undefined },
+            snapshot,
+            references,
+          },
+          true,
+        );
+        return send(202, store.job(job.id));
+      }
+      if (
+        path[0] === "api" &&
+        path[1] === "jobs" &&
         path.length === 3 &&
         req.method === "GET"
       ) {
@@ -481,9 +564,9 @@ export function createApp({
         if (!servePreview)
           return send(200, {
             service: "Frame browser extension agent",
-            version: "0.6.0",
+            version: "0.7.0",
             message:
-              "这是插件的本地 API 服务。请加载 dist 扩展，在网页选中文字后右键选择「Frame · 直接生图」。",
+              "这是插件的本地 API 服务。请加载 dist 扩展，在网页选中文字后右键选择「Frame · 理解并生图」。",
           });
         const file = resolve(
           staticDir,

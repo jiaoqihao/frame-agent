@@ -59,6 +59,7 @@ try {
       ]);
     }, text);
   const first = await direct("季度销量柱状图：一月:20，二月:35，三月:50");
+  await panel.getByRole("button", { name: "确认并生成", exact: true }).click();
   assert.equal(first.quickError, undefined);
   await panel.getByText("SVG 路由演示 · 非模型生成", { exact: true }).waitFor();
   assert.equal(
@@ -96,12 +97,14 @@ try {
   await panel
     .getByRole("textbox", { name: "本次生成要求" })
     .fill("保留图表数据，把标题改为蓝色");
-  await panel.getByRole("button", { name: "生成", exact: true }).click();
+  await panel.getByRole("button", { name: "整理内容", exact: true }).click();
+  await panel.getByRole("button", { name: "确认并生成", exact: true }).click();
   await panel.waitForFunction(
     () => document.querySelectorAll(".history-item").length === 2,
   );
   assert.equal(store.jobs(first.activeProjectId)[0].plan.renderer, "svg");
   const second = await direct("日落海滩上的人物肖像，写实摄影风格");
+  await panel.getByRole("button", { name: "确认并生成", exact: true }).click();
   await panel.getByText("演示占位图 · 非 AI 生成", { exact: true }).waitFor();
   assert.equal(store.job(second.lastQuickJob.jobId).plan.renderer, "image_api");
   assert.equal(
@@ -113,6 +116,7 @@ try {
   await panel.getByRole("button", { name: "创建项目", exact: true }).click();
   await panel.locator(".prompt-input").waitFor();
   const other = await direct("制作时间线：2024启动，2025发布，2026扩展");
+  await panel.getByRole("button", { name: "确认并生成", exact: true }).click();
   await panel.getByText("SVG 路由演示 · 非模型生成", { exact: true }).waitFor();
   assert.notEqual(other.activeProjectId, first.activeProjectId);
   assert.equal(
@@ -133,7 +137,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "QUICK MENU PASS: context-menu handler → default project → SVG → PNG export → SVG edit → image API route → project memory → project switch → reload. No confirmation/generate button required for right-click requests. Native menu click and panel-open gestures remain manual.",
+    "QUICK MENU PASS: context-menu handler → default project → SVG → PNG export → SVG edit → image API route → project memory → project switch → reload. All generation requires review approval. Native menu click and panel-open gestures remain manual.",
   );
 } finally {
   await context?.close();

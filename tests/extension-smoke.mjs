@@ -95,7 +95,7 @@ try {
   await target.mouse.move(340, 340, { steps: 8 });
   await target.mouse.up();
   await panel
-    .getByRole("button", { name: "加入项目", exact: true })
+    .getByRole("button", { name: "理解截图", exact: true })
     .waitFor({ timeout: 12000 })
     .catch(async (error) => {
       console.log(
@@ -111,7 +111,19 @@ try {
       return [image.naturalWidth, image.naturalHeight];
     });
   assert.deepEqual(dimensions, [280, 200]);
-  await panel.getByRole("button", { name: "加入项目", exact: true }).click();
+  await panel.getByRole("button", { name: "理解截图", exact: true }).click();
+  await panel
+    .getByRole("button", { name: "确认并生成", exact: true })
+    .waitFor();
+  assert.equal(store.jobs(project.id)[0].status, "awaiting_review");
+  assert.equal(
+    store.assets(project.id).filter((a) => a.kind === "generated").length,
+    0,
+  );
+  assert.equal(
+    store.jobs(project.id)[0].plan.snapshot.references[0].hasImage,
+    true,
+  );
   await panel.locator(".memory-drawer > summary").click();
   await panel.waitForFunction(
     () => document.querySelectorAll(".asset-card").length === 1,
@@ -120,6 +132,12 @@ try {
     store.assets(project.id).filter((a) => a.kind === "image").length,
     1,
   );
+  await panel
+    .getByRole("textbox", { name: "审核后的绘图说明" })
+    .fill("绘制日落湖边的机器人插画");
+  await panel.getByRole("button", { name: "确认并生成", exact: true }).click();
+  await panel.getByText("演示占位图 · 非 AI 生成", { exact: true }).waitFor();
+  assert.equal(store.jobs(project.id)[0].status, "completed");
   await target.bringToFront();
   await worker.evaluate(
     async (tabId) =>

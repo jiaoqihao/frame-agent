@@ -9,6 +9,7 @@ import {
 } from "./svg.mjs";
 import { ImageAPI } from "./image-api.mjs";
 import { refineImagePrompt, imageInputs } from "./image-prompt.mjs";
+import { reviewSource } from "./source-review.mjs";
 import { specSkill, SPEC_SCHEMA, validateSpec } from "./svg-spec.mjs";
 import { renderStructuredSvg } from "./svg-renderer.mjs";
 import { withRenderPage, inspectSvg } from "./svg-browser.mjs";
@@ -95,6 +96,9 @@ export class OpenAIProvider {
       throw new Error(`模型接口返回 ${response.status}：${advice}。`);
     }
     return response.json();
+  }
+  async interpret(context) {
+    return reviewSource(this, context);
   }
   async plan({ request, snapshot, references }) {
     const content = [
@@ -403,6 +407,17 @@ const escapeXml = (value) =>
 export class DemoProvider {
   constructor() {
     this.name = "demo";
+  }
+  async interpret({ request, references }) {
+    return {
+      understanding: "演示模式：展示内容审核流程，未调用模型理解原文。",
+      suitability: "needs_adaptation",
+      adaptedInstruction: request.selectionText || request.instruction,
+      changes: ["接入语言模型后，会在这里解释原意并整理绘图说明。"],
+      uncertainties: references.some((r) => r.asset.data)
+        ? ["演示模式未识别截图内容，请自行补充绘图说明。"]
+        : [],
+    };
   }
   async explain({ selection, history, question }) {
     return `演示回复（未调用模型）\n\n${history.length ? `你的追问：${question}\n\n` : ""}原文：${selection}\n\n接入语言模型后，这里会显示解释，并结合此前对话回答追问。`;

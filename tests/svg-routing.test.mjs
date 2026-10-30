@@ -288,6 +288,20 @@ test("right-click endpoint creates a project, routes charts to SVG, and makes re
   const first = await submit(input);
   assert.equal(first.status, 202);
   await app.drain();
+  const approve = async (id) => {
+    const review = store.job(id).plan.review;
+    const response = await fetch(`${root}/api/jobs/${id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reviewRevision: review.revision,
+        instruction: review.adaptedInstruction,
+      }),
+    });
+    assert.equal(response.status, 202);
+    await app.drain();
+  };
+  await approve(first.data.job.id);
   const job = store.job(first.data.job.id);
   assert.equal(job.plan.renderer, "svg");
   assert.equal(job.plan.skill, "svg-drawing");
@@ -313,6 +327,7 @@ test("right-click endpoint creates a project, routes charts to SVG, and makes re
     selectionText: "阳光下的人物肖像，背景是森林风景",
   });
   await app.drain();
+  await approve(next.data.job.id);
   assert.equal(store.job(next.data.job.id).plan.renderer, "image_api");
   assert.equal(store.job(next.data.job.id).plan.snapshot.recentTurns.length, 0);
   const service = await (await fetch(root)).json();

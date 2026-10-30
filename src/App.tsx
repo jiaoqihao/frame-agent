@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { api, assetUrl, isExtension } from "./api";
 import ChatPanel from "./ChatPanel";
+import ReviewCard from "./ReviewCard";
 import type { Asset, Capture, Detail, Job, Project, Settings } from "./types";
 
 const modeNames = { new: "生成新图", edit: "继续修改", fuse: "融合素材" };
@@ -307,6 +308,9 @@ export default function App() {
   const selectedAssets = assets.filter((a) => selected.includes(a.id));
   const base = assets.find((a) => a.id === baseId);
   const project = detail?.project;
+  const reviewJobs = jobs.filter(
+    (j) => j.status === "awaiting_review" && j.plan?.review,
+  );
   const activeJob = jobs.find(
     (j) => j.status === "queued" || j.status === "running",
   );
@@ -338,11 +342,12 @@ export default function App() {
     return asset;
   }
   async function generate() {
-    if (!projectId || !instruction.trim()) return;
+    if (!projectId || (!instruction.trim() && !selected.length)) return;
     const id = projectId;
     await action(async () => {
       const job = await api<Job>(`/api/projects/${id}/jobs`, {
-        instruction,
+        instruction:
+          instruction.trim() || "理解所选素材，整理成表达核心信息的绘图说明。",
         mode,
         assetIds: selected,
         baseAssetId: mode === "edit" ? baseId : null,
@@ -350,6 +355,22 @@ export default function App() {
       });
       if (currentId.current === id) setViewJobId(job.id);
       await refresh(id);
+    });
+  }
+  async function reviewAction(job: Job, instruction?: string) {
+    await action(async () => {
+      await api<Job>(
+        `/api/jobs/${job.id}/${instruction === undefined ? "cancel" : "approve"}`,
+        {
+          reviewRevision: job.plan!.review!.revision,
+          ...(instruction === undefined ? {} : { instruction }),
+        },
+      );
+      localStorage.removeItem(
+        `frame-review:${job.id}:${job.plan!.review!.revision}`,
+      );
+      if (currentId.current === job.project_id) setViewJobId(job.id);
+      await refresh(job.project_id);
     });
   }
   function continueFrom(asset: Asset) {
@@ -400,9 +421,22 @@ export default function App() {
     setCaptureBusy(true);
     setError("");
     try {
-      await addAsset(capture);
+      const id = currentId.current;
+      const asset = await addAsset(capture);
+      const job = await api<Job>(`/api/projects/${id}/jobs`, {
+        instruction:
+          instruction.trim() || "理解截图中的内容，整理成适合配图的绘图说明。",
+        mode: "new",
+        assetIds: [asset.id],
+        baseAssetId: null,
+        autoMemory,
+      });
       await chrome.storage.local.remove(`capture:${capture.id}`);
-      setNotice("素材已加入当前项目");
+      if (currentId.current === id) {
+        setViewJobId(job.id);
+        setWorkspace("image");
+      }
+      await refresh(id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -608,7 +642,7 @@ export default function App() {
                       className="button small primary"
                       onClick={() => void importCapture(c)}
                     >
-                      加入项目
+                      理解截图
                     </button>
                     <button
                       className="icon-button"
@@ -665,6 +699,44 @@ export default function App() {
           {project && workspace === "image" && (
             <div className="studio-layout">
               <div className="creative-column">
+                <ol className="workflow-steps" aria-label="生图工作流">
+                  {["采集内容", "AI 理解", "用户审核", "生成图片"].map(
+                    (label, i) => {
+                      const step = activeJob
+                        ? activeJob.request.approvedAt
+                          ? 3
+                          : 1
+                        : reviewJobs.length
+                          ? 2
+                          : latest?.status === "completed"
+                            ? 3
+                            : 0;
+                      return (
+                        <li
+                          key={label}
+                          aria-current={i === step ? "step" : undefined}
+                          className={
+                            i === step ? "current" : i < step ? "done" : ""
+                          }
+                        >
+                          <span>{i + 1}</span>
+                          {label}
+                        </li>
+                      );
+                    },
+                  )}
+                </ol>
+                {reviewJobs.map((job) => (
+                  <ReviewCard
+                    key={job.id}
+                    job={job}
+                    assets={assets}
+                    busy={busy}
+                    onApprove={(j, text) => void reviewAction(j, text)}
+                    onCancel={(j) => void reviewAction(j)}
+                  />
+                ))}
+
                 <div className="manual-create">
                   <section className="card composer">
                     <div className="capture-actions">
@@ -776,7 +848,7 @@ export default function App() {
                         disabled={
                           busy ||
                           !!running ||
-                          !instruction.trim() ||
+                          (!instruction.trim() && !selected.length) ||
                           !health?.ready ||
                           (mode === "edit" && !baseId)
                         }
@@ -787,7 +859,7 @@ export default function App() {
                         ) : (
                           <Sparkles size={17} />
                         )}{" "}
-                        {running ? "生成中" : "生成"}
+                        {running ? "处理中" : "整理内容"}
                         <ArrowRight size={16} />
                       </button>
                     </div>
@@ -816,8 +888,9 @@ export default function App() {
                       <span>{latest.error}</span>
                       <button
                         onClick={() => {
-                          setInstruction(
-                            latest.request.selectionText ||
+                          updateInstruction(
+                            latest.request.approvedInstruction ||
+                              latest.request.selectionText ||
                               latest.request.instruction,
                           );
                           setMode(latest.request.mode as Mode);
@@ -908,12 +981,21 @@ export default function App() {
                       {showPlan && viewed?.plan && (
                         <div className="plan-details">
                           <h4>创作依据</h4>
+                          {viewed.plan.review && (
+                            <details className="review-details">
+                              <summary>审核记录</summary>
+                              <p>{viewed.plan.review.understanding}</p>
+                              <p className="review-original">
+                                {viewed.plan.review.approvedInstruction}
+                              </p>
+                            </details>
+                          )}
                           <p className="route-explanation">
                             {viewed.plan.routeReason}
                           </p>
                           {viewed.plan.skill && (
                             <p>
-                              SVG 技能：{viewed.plan.skill}
+                              绘图技能：{viewed.plan.skill}
                               {viewed.plan.provider === "demo"
                                 ? "（演示模式未调用模型）"
                                 : ""}

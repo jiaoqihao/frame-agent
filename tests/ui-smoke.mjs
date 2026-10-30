@@ -57,7 +57,8 @@ try {
   await page
     .getByRole("textbox", { name: "本次生成要求" })
     .fill("让小林走进清晨的森林，保留橙色围巾，用作科普故事的开篇插画。");
-  await page.getByRole("button", { name: "生成", exact: true }).click();
+  await page.getByRole("button", { name: "整理内容", exact: true }).click();
+  await page.getByRole("button", { name: "确认并生成", exact: true }).click();
   await page.getByText("演示占位图 · 非 AI 生成", { exact: true }).waitFor();
   await page.getByRole("button", { name: /查看创作依据/ }).click();
   assert.match(
@@ -80,7 +81,8 @@ try {
   await page
     .getByRole("textbox", { name: "本次生成要求" })
     .fill("保留机器人和围巾，把天气改为雨天。");
-  await page.getByRole("button", { name: "生成", exact: true }).click();
+  await page.getByRole("button", { name: "整理内容", exact: true }).click();
+  await page.getByRole("button", { name: "确认并生成", exact: true }).click();
   await page.waitForFunction(
     () => document.querySelectorAll(".history-item").length === 2,
   );
@@ -91,7 +93,7 @@ try {
   );
   const jobs = store.jobs(store.projects()[0].id);
   assert.equal(jobs[0].plan.snapshot.references[0].id, jobs[1].result_asset_id);
-  await page.getByRole("button", { name: "编辑项目设定" }).click();
+  await page.getByRole("button", { name: "编辑项目记忆" }).click();
   await page.getByLabel("视觉风格", { exact: true }).fill("柔和水彩，纸张纹理");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   assert.notEqual(

@@ -96,7 +96,10 @@ export function memorySnapshot(project, references, jobs = []) {
       .slice(0, 3)
       .reverse()
       .map((j) => ({
-        instruction: j.request.selectionText || j.request.instruction,
+        instruction:
+          j.request.approvedInstruction ||
+          j.request.selectionText ||
+          j.request.instruction,
         summary: j.plan?.summary || "",
         resultAssetId: j.result_asset_id,
       })),

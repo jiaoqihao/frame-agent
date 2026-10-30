@@ -216,6 +216,13 @@ test("full API workflow: create, capture, pin, generate, edit and inspect immuta
   const created = await request(`/api/projects/${p.id}/jobs`, baseRequest);
   assert.equal(created.status, 202);
   await app.drain();
+  const review = store.job(created.body.id).plan.review;
+  assert.equal(store.job(created.body.id).status, "awaiting_review");
+  await request(`/api/jobs/${created.body.id}/approve`, {
+    reviewRevision: review.revision,
+    instruction: review.adaptedInstruction,
+  });
+  await app.drain();
   const job = (await request(`/api/jobs/${created.body.id}`)).body;
   assert.equal(job.status, "completed");
   assert.equal(job.plan.snapshot.references[0].id, a.id);
@@ -248,6 +255,12 @@ test("full API workflow: create, capture, pin, generate, edit and inspect immuta
       instruction: "保持机器人，添加雪山",
     })
   ).body;
+  await app.drain();
+  const editReview = store.job(next.id).plan.review;
+  await request(`/api/jobs/${next.id}/approve`, {
+    reviewRevision: editReview.revision,
+    instruction: editReview.adaptedInstruction,
+  });
   await app.drain();
   const edited = store.job(next.id);
   assert.equal(edited.status, "completed");
@@ -312,7 +325,7 @@ test("input validation rejects forged images, missing original, cross-project as
 test("a failed provider produces a recoverable failed job without fake generated assets", async (t) => {
   const provider = {
     name: "test",
-    plan: async () => {
+    interpret: async () => {
       throw new Error("测试网络错误");
     },
   };

@@ -1259,6 +1259,87 @@ h1 span {
   gap: 8px;
   margin-top: 16px;
 }
+.workflow-steps {
+  display: flex;
+  list-style: none;
+  gap: 6px;
+  padding: 0;
+  margin: 0 0 14px;
+}
+.workflow-steps li {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #7b8475;
+}
+.workflow-steps li span {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  background: #e9ecdf;
+  flex-shrink: 0;
+}
+.workflow-steps .current {
+  color: #294b34;
+  font-weight: 700;
+}
+.workflow-steps .current span {
+  background: #355c4b;
+  color: white;
+}
+.workflow-steps .done span {
+  background: #dce8d4;
+}
+.review-card {
+  margin: 16px 0;
+  padding: 20px;
+}
+.review-understanding {
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-details {
+  margin: 12px 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.review-details summary {
+  cursor: pointer;
+}
+.review-questions {
+  padding: 10px 12px;
+  background: #fff5dd;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.review-questions ul,
+.review-details ul {
+  padding-left: 18px;
+}
+.review-original {
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.review-source-image {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}
+.review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
 .form-error {
   font-size: 11px;
   color: #b16c4e;

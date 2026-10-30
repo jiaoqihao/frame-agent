@@ -2,7 +2,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "frame-generate",
-      title: "Frame · 直接生图",
+      title: "Frame · 理解并生图",
       contexts: ["selection"],
     });
     chrome.contextMenus.create({

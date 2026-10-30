@@ -201,7 +201,14 @@ export class Store {
       .map((r) => this.job(r.id));
   }
   updateJob(id, changes) {
-    const allowed = ["status", "stage", "plan", "result_asset_id", "error"];
+    const allowed = [
+      "status",
+      "stage",
+      "plan",
+      "result_asset_id",
+      "error",
+      "request",
+    ];
     const entries = Object.entries(changes).filter(([key]) =>
       allowed.includes(key),
     );
@@ -210,7 +217,9 @@ export class Store {
         `UPDATE jobs SET ${entries.map(([k]) => `${k}=?`).join(",")},updated_at=? WHERE id=?`,
       )
       .run(
-        ...entries.map(([k, v]) => (k === "plan" ? JSON.stringify(v) : v)),
+        ...entries.map(([k, v]) =>
+          ["plan", "request"].includes(k) ? JSON.stringify(v) : v,
+        ),
         new Date().toISOString(),
         id,
       );

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Frame · 项目记忆配图 Agent",
-  "version": "0.6.0",
-  "description": "选中文字右键直接生图。Agent 结合项目记忆，自动选择 SVG skill 或第三方图片 API。",
+  "version": "0.7.0",
+  "description": "选中文字或截图，AI 理解整理，用户审核后结合项目记忆生成 SVG 图表或模型图片。",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
@@ -11,9 +11,7 @@
     "contextMenus",
     "sidePanel"
   ],
-  "host_permissions": [
-    "http://127.0.0.1:8787/*"
-  ],
+  "host_permissions": ["http://127.0.0.1:8787/*"],
   "icons": {
     "16": "icons/frame-16.png",
     "48": "icons/frame-48.png",

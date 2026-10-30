@@ -79,9 +79,28 @@ try {
   await expect(input).toHaveValue(
     "流程图：读取 → 理解 → 绘图。使用蓝色。\n\n增加标题：Agent 工作流程",
   );
-  await panel.getByRole("button", { name: "生成", exact: true }).click();
+  await panel.getByRole("button", { name: "整理内容", exact: true }).click();
+  await expect(
+    panel.getByRole("region", { name: "审核绘图说明" }),
+  ).toBeVisible();
+  assert.equal(
+    store.assets(projectId).filter((a) => a.kind === "generated").length,
+    0,
+  );
+  const reviewed = panel.getByRole("textbox", { name: "审核后的绘图说明" });
+  await reviewed.fill("流程图：读取 → 理解 → 审核 → 绘图。使用蓝色。");
+  await panel.reload();
+  await expect(reviewed).toHaveValue(
+    "流程图：读取 → 理解 → 审核 → 绘图。使用蓝色。",
+  );
+  await panel.screenshot({
+    path: "test-results/content-review-workflow.png",
+    fullPage: true,
+  });
+  await panel.getByRole("button", { name: "确认并生成", exact: true }).click();
   await panel.getByText("SVG 路由演示 · 非模型生成", { exact: true }).waitFor();
   assert.match(store.jobs(projectId)[0].request.instruction, /使用蓝色/);
+  assert.match(store.jobs(projectId)[0].request.approvedInstruction, /审核/);
   mkdirSync("test-results", { recursive: true });
   await panel.screenshot({
     path: "test-results/simple-workspace.png",

@@ -165,6 +165,15 @@ test("hot config updates affect new jobs, while running and queued jobs retain t
     providerFactory: (config) => ({
       name: config.mode === "demo" ? "demo" : "openai",
       apiKey: config.llm.apiKey,
+      async interpret() {
+        return {
+          understanding: "test",
+          suitability: "ready",
+          adaptedInstruction: "画一张图",
+          changes: [],
+          uncertainties: [],
+        };
+      },
       async plan() {
         calls.push(`plan:${config.llm.model}`);
         await gate;
@@ -205,6 +214,20 @@ test("hot config updates affect new jobs, while running and queued jobs retain t
   };
   const old = [];
   for (let i = 0; i < 3; i++) old.push(await submit());
+  await app.drain();
+  const approve = async (id) => {
+    const review = store.job(id).plan.review;
+    const res = await fetch(`${root}/api/jobs/${id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reviewRevision: review.revision,
+        instruction: review.adaptedInstruction,
+      }),
+    });
+    assert.equal(res.status, 202);
+  };
+  for (const job of old) await approve(job.id);
   const input = draft(settings);
   input.mode = "live";
   input.llm.model = "new-model";
@@ -221,6 +244,8 @@ test("hot config updates affect new jobs, while running and queued jobs retain t
   assert.equal(health.ready, true);
   const fresh = await submit();
   release();
+  await app.drain();
+  await approve(fresh.id);
   await app.drain();
   assert.equal(calls.filter((v) => v === "generate:old-model").length, 3);
   assert.equal(calls.filter((v) => v === "generate:new-model").length, 1);
