@@ -137,6 +137,64 @@ try {
     true,
   );
   assert.deepEqual(errors, []);
+  await panel.getByTitle("项目记忆", { exact: true }).click();
+  await panel.getByLabel("视觉风格", { exact: true }).fill("水彩留白");
+  await panel.getByText("角色、文字与排除项", { exact: true }).click();
+  await panel
+    .getByLabel("角色 / 产品特征", { exact: true })
+    .fill("机器人戴橙色围巾");
+  await panel.getByLabel("避免内容", { exact: true }).fill("荧光色");
+  await panel.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(panel.getByRole("dialog")).toHaveCount(0);
+  assert.equal(
+    store.project(projectId).settings.subjectIdentity,
+    "机器人戴橙色围巾",
+  );
+  await panel.reload();
+  await panel.getByTitle("项目记忆", { exact: true }).click();
+  await expect(panel.getByLabel("视觉风格", { exact: true })).toHaveValue(
+    "水彩留白",
+  );
+  await panel.getByText("角色、文字与排除项", { exact: true }).click();
+  await expect(
+    panel.getByLabel("角色 / 产品特征", { exact: true }),
+  ).toHaveValue("机器人戴橙色围巾");
+  await panel.screenshot({
+    path: "test-results/project-memory.png",
+    fullPage: true,
+  });
+  await panel.getByRole("button", { name: "清空风格", exact: true }).click();
+  await expect(panel.getByLabel("视觉风格", { exact: true })).toHaveValue("");
+  await panel.getByRole("button", { name: "取消", exact: true }).click();
+  assert.equal(store.project(projectId).settings.style, "水彩留白");
+  await panel.getByTitle("项目记忆", { exact: true }).click();
+  await panel
+    .getByRole("button", { name: "撤销上次保存", exact: true })
+    .click();
+  await expect(panel.getByLabel("视觉风格", { exact: true })).not.toHaveValue(
+    "水彩留白",
+  );
+  assert.equal(store.project(projectId).settings.subjectIdentity, "");
+  await panel.getByRole("button", { name: "取消", exact: true }).click();
+  await panel.getByTitle("项目记忆", { exact: true }).click();
+  await expect(panel.getByRole("dialog")).toBeVisible();
+  const beforeExternal = store.project(projectId);
+  store.updateProject(projectId, beforeExternal.name, {
+    ...beforeExternal.settings,
+    style: "另一窗口的水墨风格",
+  });
+  await panel.getByLabel("视觉风格", { exact: true }).fill("旧窗口的编辑");
+  await panel.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(panel.getByRole("dialog")).toContainText(
+    "项目记忆已在其他窗口更新",
+  );
+  await panel.getByRole("button", { name: "取消", exact: true }).click();
+  await panel.getByTitle("项目记忆", { exact: true }).click();
+  await expect(panel.getByLabel("视觉风格", { exact: true })).toHaveValue(
+    "另一窗口的水墨风格",
+  );
+  await panel.getByRole("button", { name: "取消", exact: true }).click();
+  assert.deepEqual(errors, []);
   console.log(
     "WORKSPACE PASS: selection → editable persistent draft → append → generate; right-click explanation → follow-up → reload → failure/retry → project isolation; 390px layout.",
   );

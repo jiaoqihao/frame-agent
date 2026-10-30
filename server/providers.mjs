@@ -8,6 +8,7 @@ import {
   svgToPng,
 } from "./svg.mjs";
 import { ImageAPI } from "./image-api.mjs";
+import { refineImagePrompt, imageInputs } from "./image-prompt.mjs";
 import { specSkill, SPEC_SCHEMA, validateSpec } from "./svg-spec.mjs";
 import { renderStructuredSvg } from "./svg-renderer.mjs";
 import { withRenderPage, inspectSvg } from "./svg-browser.mjs";
@@ -104,6 +105,7 @@ export class OpenAIProvider {
           currentRequest: request.instruction,
           selectedWebText: request.selectionText || null,
           memory: snapshot,
+          imageInputs: imageInputs(references, request),
         }),
       },
     ];
@@ -145,7 +147,14 @@ export class OpenAIProvider {
       )
     )
       throw new Error("绘图方案字段不完整，请重试。");
-    return resolveRoute({ request, references }, plan);
+    const resolved = resolveRoute({ request, references }, plan);
+    return resolved.renderer === "image_api"
+      ? refineImagePrompt(
+          this,
+          { request, snapshot, references, plan: resolved },
+          content,
+        )
+      : resolved;
   }
   async complete(instructions, content, schema) {
     let result;

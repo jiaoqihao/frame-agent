@@ -1,6 +1,6 @@
 {
   "name": "frame-agent",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,7 +16,8 @@
     "test:extension": "node tests/extension-smoke.mjs && node tests/quick-menu-smoke.mjs",
     "test:settings": "node tests/settings-ui.mjs",
     "format": "prettier --write src server tests public *.json *.ts *.html README.md",
-    "test:workspace": "node tests/workspace-ui.mjs"
+    "test:workspace": "node tests/workspace-ui.mjs",
+    "start": "node scripts/launch.mjs"
   },
   "dependencies": {
     "@antv/infographic": "0.2.20",

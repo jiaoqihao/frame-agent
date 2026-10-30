@@ -362,7 +362,37 @@ test("OpenAI adapter sends actual images to understanding and multipart editing 
               output: [
                 {
                   content: [
-                    { type: "output_text", text: JSON.stringify(expected) },
+                    {
+                      type: "output_text",
+                      text: JSON.stringify(
+                        calls.length === 1
+                          ? expected
+                          : {
+                              intent: "角色配图",
+                              scene: "森林",
+                              subject: "机器人",
+                              composition: "机器人位于前景",
+                              appearance: "编辑插画",
+                              lighting: "柔和日光",
+                              text: [],
+                              references: [
+                                {
+                                  imageIndex: 1,
+                                  role: "原图",
+                                  use: "保留机器人",
+                                },
+                                {
+                                  imageIndex: 2,
+                                  role: "场景",
+                                  use: "参考森林",
+                                },
+                              ],
+                              preserve: ["围巾"],
+                              changes: ["森林"],
+                              constraints: [],
+                            },
+                      ),
+                    },
                   ],
                 },
               ],
@@ -383,10 +413,11 @@ test("OpenAI adapter sends actual images to understanding and multipart editing 
   );
   assert.equal(payload.text.format.strict, true);
   const image = await provider.generate({ plan, snapshot, references: refs });
-  assert.ok(calls[1].url.endsWith("/images/edits"));
-  assert.equal(calls[1].options.body.getAll("image[]").length, 2);
-  assert.equal(calls[1].options.body.getAll("image[]")[0].name, `${a.id}.png`);
-  assert.equal(calls[1].options.body.get("size"), "1536x1024");
+  assert.ok(calls[2].url.endsWith("/images/edits"));
+  assert.equal(calls[2].options.body.getAll("image[]").length, 2);
+  assert.equal(calls[2].options.body.getAll("image[]")[0].name, `${a.id}.png`);
+  assert.equal(calls[2].options.body.get("size"), "1536x1024");
+  assert.equal(calls[2].options.body.get("prompt"), plan.prompt);
   assert.equal(image.mime, "image/png");
 });
 test("OpenAI adapter uses generation without references and surfaces actionable errors", async () => {

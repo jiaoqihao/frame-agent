@@ -59,6 +59,14 @@ function settingsFrom(value) {
       throw new InputError("项目设定需要是 2000 字以内的文字");
     result[key] = value[key].trim();
   }
+  for (const key of ["subjectIdentity", "typography", "avoid"]) {
+    if (
+      value[key] !== undefined &&
+      (typeof value[key] !== "string" || value[key].length > 2000)
+    )
+      throw new InputError("项目记忆需要是 2000 字以内的文字");
+    result[key] = (value[key] || "").trim();
+  }
   if (!["1:1", "3:2", "2:3"].includes(value.ratio))
     throw new InputError("不支持的图片比例");
   return { ...result, ratio: value.ratio };
@@ -121,7 +129,10 @@ export function createApp({
           snapshot: context.snapshot,
           provider: taskProvider.name,
           configRevision: configured?.revision || null,
-          skill: plan.renderer === "svg" ? "svg-drawing" : null,
+          skill:
+            plan.renderer === "svg"
+              ? "svg-drawing"
+              : plan.promptQuality?.skill || null,
         };
         store.updateJob(job.id, {
           plan: recorded,
@@ -228,13 +239,14 @@ export function createApp({
         const activeProvider = settings?.provider().provider || provider;
         return send(200, {
           ok: true,
+          service: "frame-agent",
           provider: activeProvider.name,
           ready:
             activeProvider.name === "demo" || Boolean(activeProvider.apiKey),
           imageApiReady:
             activeProvider.name === "demo" ||
             Boolean(activeProvider.imageAPI?.apiKey),
-          version: "0.5.0",
+          version: "0.6.0",
         });
       }
       if (url.pathname === "/api/quick-generate" && req.method === "POST") {
@@ -325,14 +337,40 @@ export function createApp({
           });
         if (path.length === 3 && req.method === "PATCH") {
           const b = await readJson(req);
+          const latestProject = store.project(project.id);
+          if (
+            !b.settings ||
+            typeof b.settings !== "object" ||
+            Array.isArray(b.settings)
+          )
+            throw new InputError("项目设定格式无效");
+          if (
+            b.memoryRevision !== undefined &&
+            b.memoryRevision !== latestProject.memoryRevision
+          )
+            throw new InputError(
+              "项目记忆已在其他窗口更新，请关闭后重新打开编辑。",
+              409,
+            );
           return send(
             200,
             store.updateProject(
               project.id,
               requiredText(b.name, "项目名称", 80),
-              settingsFrom(b.settings),
+              settingsFrom({ ...latestProject.settings, ...b.settings }),
             ),
           );
+        }
+        if (
+          path.length === 5 &&
+          path[3] === "memory" &&
+          path[4] === "undo" &&
+          req.method === "POST"
+        ) {
+          const b = await readJson(req);
+          if (b.memoryRevision !== store.project(project.id).memoryRevision)
+            throw new InputError("项目记忆已更新，请关闭后重新打开编辑。", 409);
+          return send(200, store.undoMemory(project.id));
         }
         if (
           path[3] === "assets" &&
@@ -443,7 +481,7 @@ export function createApp({
         if (!servePreview)
           return send(200, {
             service: "Frame browser extension agent",
-            version: "0.5.0",
+            version: "0.6.0",
             message:
               "这是插件的本地 API 服务。请加载 dist 扩展，在网页选中文字后右键选择「Frame · 直接生图」。",
           });

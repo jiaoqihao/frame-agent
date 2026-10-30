@@ -16,7 +16,7 @@ export async function api<T>(
     });
   } catch {
     throw new Error(
-      "无法连接本地服务。请在项目目录运行 npm run server，然后重试。",
+      "服务未启动。请双击项目文件夹中的「启动 Frame.cmd」，然后重试。",
     );
   }
   const data = await response.json();

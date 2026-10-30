@@ -16,6 +16,8 @@ Frame Agent 是一个带项目记忆的 Chrome / Edge 扩展。它把网页文�
 
 - **Agent 自动选路**：规则与模型共同判断，统计图交给 ECharts，信息图使用 AntV，自定义示意图使用 SVG skill，写实画面调用独立图片 API。
 - **项目级记忆**：SQLite 保存项目设定、素材和历史任务；编辑时携带原图与结构化数据，支持“沿用上次配色”“只改标题”等连续创作。
+- **可编辑风格记忆**：直接保存风格、配色、角色特征、文字风格和排除项，支持清空、撤销上次保存和窗口间冲突检查。
+- **图片提示词 skill**：图片路线自动整理主体、构图、光照、准确文字和参考图用途，校验后生成最终提示词；本次要求优先于旧记忆。
 - **受约束的 SVG 生成**：数据证据与合计校验、浏览器渲染、文字越界和重叠检测；自由绘图加入视觉复核，最多修复两次。
 - **浏览器原生入口**：右键直接生图、加入可编辑草稿、AI 解释；支持区域截图和 SVG / PNG 导出。
 - **可配置模型**：语言模型和图片服务分别配置，支持 DeepSeek 与 OpenAI 兼容接口。图片模型名可填写中转站提供的 `gpt-image-2`；兼容性取决于中转站实际接口。
@@ -64,6 +66,10 @@ flowchart LR
 
 从本仓库下载源码并解压，或克隆后进入项目。GitHub Releases 提供已构建的插件压缩包；解压后可直接加载。插件仍需以下本地 Agent 服务。
 
+**Windows：安装 Node.js 24+ 后，双击「启动 Frame.cmd」。** 首次缺少依赖时自动安装，缺少插件构建时自动构建；服务就绪后可关闭启动窗口。再次双击会复用已运行的服务。它不会自动随 Windows 开机启动；重启电脑后再次双击即可。
+
+完整启动包 `frame-starter-0.6.0.zip` 包含服务、插件与启动入口；`frame-extension-0.6.0.zip` 仅包含插件。完整包不包含 Node.js、模型密钥或用户数据，首次准备依赖需要联网。
+
 需要 Node.js 24+ 和本机 Edge / Chrome（用于无界面排版检查）。可用 `FRAME_BROWSER_PATH` 指定浏览器；未找到本机浏览器时需要先运行 `npx playwright install chromium`。本地 Agent 服务负责模型密钥、工具调用和 SQLite 记忆；用户交互在插件里完成。
 
 ```powershell
@@ -81,9 +87,17 @@ npm run server
 
 已经安装旧版时，先运行构建，然后在扩展管理页点击 Frame 的“重新加载”，并关闭再打开侧边栏。后端代码改动后也需要重启 `npm run server`。
 
+启动失败时先看窗口提示。端口被占用不会结束其他程序；旧服务需要先关闭。后台服务日志位于 `.data/service.log`。开发者仍可使用上述命令以前台方式运行服务。
+
 `127.0.0.1:8787` 现在只提供本地 API 和服务说明，不提供独立工作台。不要把这个地址当作插件入口。
 
 ## 两种生成方式
+
+### 项目风格与图片提示词
+
+侧边栏顶部「项目记忆」可以编辑用途、视觉风格、配色和长期约束；展开「角色、文字与排除项」可补充人物/产品特征、文字排版偏好和避免内容。保存后参与后续创作，本次明确要求优先。清空风格需要再点保存才生效；撤销上次保存立即恢复上一版，最多保留 10 次变化。已有任务保留提交时的记忆快照。
+
+图片路线会加载新的 [image-prompt skill](agent-skills/image-prompt/SKILL.md)，正常增加一次语言模型调用，结构异常最多修复一次。最终提示词会记录在「创作依据」中，再原样交给已有图片 API。SVG 流程不增加这一步。参考方法及验证边界见 [调研记录](docs/image-prompt-research.md)。
 
 | 输入与用途                               | Agent 选择     | 实际执行                               |
 | ---------------------------------------- | -------------- | -------------------------------------- |
@@ -210,16 +224,19 @@ server/routing.mjs           规则约束与模型路由决策
 server/providers.mjs         语言模型规划、SVG skill 调用与有限修复
 server/svg.mjs               SVG 校验、PNG 栅格化、演示 SVG
 server/image-api.mjs         独立第三方图片接口适配
+server/image-prompt.mjs      结构化绘图说明、校验与提示词编译
 server/app.mjs               API、任务队列、右键幂等提交
 server/store.mjs             SQLite 项目、素材、任务持久化
 agent-skills/svg-drawing/    实际参与推理的 SVG 技能
+agent-skills/image-prompt/   实际参与推理的图片提示词技能
+scripts/launch.mjs           Windows 双击入口使用的服务启动器
 ```
 
 本地服务仅监听 127.0.0.1，固定插件默认端口 8787，不含多用户登录，不应直接暴露公网。数据保存到 `.data/frame.sqlite`，备份时关闭服务并复制整个 `.data`。重启时未完成任务会标记为中断。
 
 ## 验证与开发
 
-本地构建与 42 项自动化测试已通过。GitHub Actions 配置保存在 [`docs/github-actions-ci.yml`](docs/github-actions-ci.yml) 作为示例；当前发布未启用云端自动测试。需要时将此文件复制到 `.github/workflows/ci.yml`，并使用具备 workflow 权限的账号或令牌提交。
+本地构建与自动化测试可通过 `npm run check` 检查。GitHub Actions 配置保存在 [`docs/github-actions-ci.yml`](docs/github-actions-ci.yml) 作为示例；当前发布未启用云端自动测试。需要时将此文件复制到 `.github/workflows/ci.yml`，并使用具备 workflow 权限的账号或令牌提交。
 
 ```powershell
 npm run check

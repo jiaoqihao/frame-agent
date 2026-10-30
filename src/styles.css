@@ -1240,6 +1240,25 @@ h1 span {
   gap: 10px;
   margin-top: 26px;
 }
+.field-hint {
+  color: var(--muted, #72766f);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.memory-extra {
+  margin: 16px 0;
+}
+.memory-extra summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.memory-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
 .form-error {
   font-size: 11px;
   color: #b16c4e;

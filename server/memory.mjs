@@ -90,6 +90,7 @@ export function retrieveMemory(store, projectId, request) {
 export function memorySnapshot(project, references, jobs = []) {
   return {
     settings: { ...project.settings },
+    memoryRevision: project.memoryRevision,
     recentTurns: jobs
       .filter((j) => j.status === "completed")
       .slice(0, 3)

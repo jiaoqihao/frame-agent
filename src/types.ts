@@ -4,12 +4,17 @@ export type Settings = {
   palette: string;
   ratio: string;
   constraints: string;
+  subjectIdentity: string;
+  typography: string;
+  avoid: string;
 };
 export type Project = {
   id: string;
   name: string;
   settings: Settings;
   created_at: string;
+  memoryRevision: string;
+  canUndoMemory: boolean;
 };
 export type Asset = {
   id: string;

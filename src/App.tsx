@@ -63,6 +63,7 @@ export default function App() {
   const [textValue, setTextValue] = useState("");
   const [textTitle, setTextTitle] = useState("");
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [memoryRevision, setMemoryRevision] = useState("");
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
@@ -446,9 +447,16 @@ export default function App() {
   }
   function openSettings() {
     if (!project) return;
-    setSettings({ ...project.settings });
-    setProjectName(project.name);
-    setModal("settings");
+    const id = project.id;
+    void action(async () => {
+      const latest = await api<Detail>(`/api/projects/${id}`);
+      if (currentId.current !== id) return;
+      setDetail(latest);
+      setSettings({ ...latest.project.settings });
+      setMemoryRevision(latest.project.memoryRevision);
+      setProjectName(latest.project.name);
+      setModal("settings");
+    });
   }
   function openModels() {
     if (isExtension) void chrome.runtime.openOptionsPage();
@@ -484,7 +492,7 @@ export default function App() {
             </button>
             <button
               className="icon-button"
-              title="项目设定"
+              title="项目记忆"
               disabled={!project}
               onClick={openSettings}
             >
@@ -1063,13 +1071,28 @@ export default function App() {
                           <strong>{project.settings.constraints}</strong>
                         </div>
                       )}
+                      {(
+                        [
+                          ["subjectIdentity", "角色 / 产品"],
+                          ["typography", "文字风格"],
+                          ["avoid", "避免内容"],
+                        ] as const
+                      ).map(
+                        ([key, label]) =>
+                          project.settings[key] && (
+                            <div key={key}>
+                              <span>{label}</span>
+                              <strong>{project.settings[key]}</strong>
+                            </div>
+                          ),
+                      )}
                     </div>
                     <button
                       className="button secondary full"
                       onClick={openSettings}
                     >
                       <Settings2 size={15} />
-                      编辑项目设定
+                      编辑项目记忆
                     </button>
                     <div className="pinned-summary">
                       <Pin size={14} />
@@ -1225,7 +1248,7 @@ export default function App() {
                 {modal === "project"
                   ? "创建一个新项目"
                   : modal === "settings"
-                    ? "项目长期设定"
+                    ? "项目记忆"
                     : "添加文字素材"}
               </h2>
               <button
@@ -1253,14 +1276,14 @@ export default function App() {
                     const id = projectId;
                     const p = await api<Project>(
                       `/api/projects/${id}`,
-                      { name: projectName, settings },
+                      { name: projectName, settings, memoryRevision },
                       "PATCH",
                     );
                     setProjects((prev) =>
                       prev.map((x) => (x.id === p.id ? p : x)),
                     );
                     await refresh(id);
-                    setNotice("项目设定已保存");
+                    setNotice("项目记忆已保存");
                   }
                   if (modal === "text") {
                     await addAsset({
@@ -1290,6 +1313,9 @@ export default function App() {
               )}
               {modal === "settings" && settings && (
                 <>
+                  <p className="field-hint">
+                    保存后用于后续创作；本次输入中的要求优先。
+                  </p>
                   <label className="field">
                     创作用途
                     <input
@@ -1347,6 +1373,87 @@ export default function App() {
                       placeholder="例如：角色始终佩戴橙色围巾；不要在图片中添加文字。"
                     />
                   </label>
+                  <details className="memory-extra">
+                    <summary>角色、文字与排除项</summary>
+                    {(
+                      [
+                        [
+                          "subjectIdentity",
+                          "角色 / 产品特征",
+                          "例如：圆形机器人，橙色围巾，保持同一外观",
+                        ],
+                        [
+                          "typography",
+                          "文字风格",
+                          "例如：中文无衬线标题，深色文字，层级清楚",
+                        ],
+                        [
+                          "avoid",
+                          "避免内容",
+                          "例如：不添加无关装饰，不使用荧光色",
+                        ],
+                      ] as const
+                    ).map(([key, label, placeholder]) => (
+                      <label className="field" key={key}>
+                        {label}
+                        <textarea
+                          aria-label={label}
+                          value={settings[key] || ""}
+                          maxLength={2000}
+                          placeholder={placeholder}
+                          onChange={(e) =>
+                            setSettings({ ...settings, [key]: e.target.value })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </details>
+                  <div className="memory-tools">
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        setSettings({
+                          ...settings,
+                          purpose: "",
+                          style: "",
+                          palette: "",
+                          constraints: "",
+                          subjectIdentity: "",
+                          typography: "",
+                          avoid: "",
+                        })
+                      }
+                    >
+                      清空风格
+                    </button>
+                    {project?.canUndoMemory && (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busy}
+                        onClick={() =>
+                          void action(async () => {
+                            const id = projectId;
+                            const p = await api<Project>(
+                              `/api/projects/${id}/memory/undo`,
+                              { memoryRevision },
+                            );
+                            setSettings({ ...p.settings });
+                            setMemoryRevision(p.memoryRevision);
+                            setProjects((prev) =>
+                              prev.map((x) => (x.id === p.id ? p : x)),
+                            );
+                            await refresh(id);
+                            setNotice("已恢复上次项目记忆");
+                          })
+                        }
+                      >
+                        撤销上次保存
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
               {modal === "text" && (

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 
 export const DEFAULT_SETTINGS = {
   purpose: "系列配图",
@@ -7,12 +7,16 @@ export const DEFAULT_SETTINGS = {
   palette: "森林绿、奶油白、暖橙色",
   ratio: "3:2",
   constraints: "",
+  subjectIdentity: "",
+  typography: "",
+  avoid: "",
 };
 export class Store {
   constructor(path) {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;
       CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS memory_history(id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL REFERENCES projects(id), settings TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), kind TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', mime TEXT, data BLOB, pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), request TEXT NOT NULL, status TEXT NOT NULL, stage TEXT NOT NULL, plan TEXT, result_asset_id TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS quick_requests(id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES jobs(id), fingerprint TEXT NOT NULL);
@@ -25,7 +29,20 @@ export class Store {
   }
   project(id) {
     const row = this.db.prepare("SELECT * FROM projects WHERE id=?").get(id);
-    return row ? { ...row, settings: JSON.parse(row.settings) } : null;
+    if (!row) return null;
+    const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(row.settings) };
+    return {
+      ...row,
+      settings,
+      memoryRevision: createHash("sha256")
+        .update(JSON.stringify(settings))
+        .digest("hex"),
+      canUndoMemory: Boolean(
+        this.db
+          .prepare("SELECT 1 FROM memory_history WHERE project_id=? LIMIT 1")
+          .get(id),
+      ),
+    };
   }
   projects() {
     return this.db
@@ -46,9 +63,53 @@ export class Store {
     return this.project(id);
   }
   updateProject(id, name, settings) {
-    this.db
-      .prepare("UPDATE projects SET name=?,settings=? WHERE id=?")
-      .run(name, JSON.stringify(settings), id);
+    settings = { ...DEFAULT_SETTINGS, ...settings };
+    const previous = this.project(id);
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      if (JSON.stringify(previous.settings) !== JSON.stringify(settings)) {
+        this.db
+          .prepare(
+            "INSERT INTO memory_history(project_id,settings,created_at) VALUES(?,?,?)",
+          )
+          .run(id, JSON.stringify(previous.settings), new Date().toISOString());
+        this.db
+          .prepare(
+            "DELETE FROM memory_history WHERE project_id=? AND id NOT IN (SELECT id FROM memory_history WHERE project_id=? ORDER BY id DESC LIMIT 10)",
+          )
+          .run(id, id);
+      }
+      this.db
+        .prepare("UPDATE projects SET name=?,settings=? WHERE id=?")
+        .run(name, JSON.stringify(settings), id);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+    return this.project(id);
+  }
+  undoMemory(id) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const previous = this.db
+        .prepare(
+          "SELECT * FROM memory_history WHERE project_id=? ORDER BY id DESC LIMIT 1",
+        )
+        .get(id);
+      if (previous) {
+        this.db
+          .prepare("UPDATE projects SET settings=? WHERE id=?")
+          .run(previous.settings, id);
+        this.db
+          .prepare("DELETE FROM memory_history WHERE id=?")
+          .run(previous.id);
+      }
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
     return this.project(id);
   }
   asset(id) {
